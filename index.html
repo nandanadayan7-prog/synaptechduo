@@ -3,45 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traffic Hero: Professional Edition</title>
+    <title>Traffic Racer: 3 Strikes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; background: #1a1a1a; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
-        #gameCanvas { background: #333; display: block; margin: 0 auto; border-left: 8px dashed #555; border-right: 8px dashed #555; }
-        .light { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #222; margin: 2px; transition: 0.3s; }
+        body { margin: 0; background: #111; overflow: hidden; font-family: 'Arial Black', sans-serif; }
+        #gameCanvas { background: #222; display: block; margin: 0 auto; border-left: 4px solid #444; border-right: 4px solid #444; }
+        .light { width: 20px; height: 20px; border-radius: 50%; margin: 4px; border: 2px solid #000; }
+        .stat-card { background: rgba(0,0,0,0.8); border: 1px solid #444; padding: 10px; border-radius: 8px; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
 
-    <div class="relative shadow-2xl border-8 border-slate-800 rounded-lg overflow-hidden">
+    <div class="relative shadow-2xl">
         <canvas id="gameCanvas" width="400" height="600"></canvas>
         
         <div class="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
-            <div class="bg-black/70 p-3 rounded-lg border border-white/20 text-white">
-                <p class="text-[10px] uppercase tracking-widest opacity-70">Safety Score</p>
-                <span id="score" class="text-2xl font-black text-yellow-400">0</span>
+            <div class="stat-card">
+                <p class="text-[10px] text-gray-400 uppercase">Score</p>
+                <span id="score" class="text-2xl font-bold text-white">0</span>
             </div>
             
-            <div class="bg-gray-900 p-2 rounded-xl border-2 border-gray-700 flex flex-col items-center">
-                <div id="redL" class="light bg-red-950"></div>
-                <div id="yellowL" class="light bg-yellow-950"></div>
-                <div id="greenL" class="light bg-green-950"></div>
+            <div class="flex flex-col gap-2">
+                <div class="stat-card text-right">
+                    <p class="text-[10px] text-gray-400 uppercase">Strikes</p>
+                    <span id="lives" class="text-2xl font-bold text-red-500">❤️❤️❤️</span>
+                </div>
+                <div class="bg-gray-900 p-1 rounded-lg border border-gray-700 flex flex-col">
+                    <div id="redL" class="light bg-red-950"></div>
+                    <div id="yellowL" class="light bg-yellow-950"></div>
+                    <div id="greenL" class="light bg-green-950"></div>
+                </div>
             </div>
         </div>
 
-        <div id="startScreen" class="absolute inset-0 bg-slate-900/95 flex flex-col items-center justify-center p-8 text-center">
-            <h1 class="text-white text-4xl font-black mb-4 tracking-tighter italic">DRIVE<span class="text-red-500">SAFE</span> 1.0</h1>
-            <div class="text-gray-400 text-sm mb-8 space-y-2 text-left">
-                <p>🚦 <span class="text-white">Red Light:</span> Stop before the line.</p>
-                <p>🚶 <span class="text-white">Zebra:</span> Let the pedestrian finish crossing.</p>
-                <p>⚠️ <span class="text-white">Penalty:</span> Mistake = Mandatory Safety Quiz.</p>
-            </div>
-            <button onclick="initGame()" class="bg-red-600 hover:bg-red-500 text-white px-12 py-4 rounded-full font-bold transition-all shadow-lg shadow-red-500/30 active:scale-95">START ENGINE</button>
+        <div id="overlay" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-8 text-center">
+            <h1 id="statusTitle" class="text-white text-5xl font-black mb-4 italic tracking-tighter">SPEED <span class="text-blue-500">LIMIT</span></h1>
+            <p id="statusDesc" class="text-gray-400 mb-8">Stop for Reds. Don't hit pedestrians. 3 mistakes allowed.</p>
+            <button onclick="startGame()" class="bg-white text-black px-10 py-4 font-bold rounded-sm hover:bg-blue-500 hover:text-white transition-all">START RACE</button>
         </div>
 
-        <div id="quizScreen" class="hidden absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6">
-            <div class="animate-bounce text-red-500 font-bold mb-2 tracking-widest uppercase">⚠️ TRAFFIC VIOLATION!</div>
-            <h2 id="qText" class="text-white text-lg font-medium mb-6 text-center italic"></h2>
+        <div id="quizBox" class="hidden absolute inset-0 bg-red-900/95 flex flex-col items-center justify-center p-10">
+            <h2 class="text-white text-2xl font-bold mb-2">FINAL CHANCE!</h2>
+            <p class="text-red-200 mb-6 text-center italic">Answer correctly to keep your score or fail the academy.</p>
+            <p id="qText" class="text-white text-xl mb-6 text-center font-bold"></p>
             <div id="qOptions" class="w-full space-y-3"></div>
         </div>
     </div>
@@ -53,170 +57,176 @@
     let active = false;
     let score = 0;
     let speed = 0;
-    let roadOffset = 0;
+    let lives = 3;
     let signal = 'GREEN';
-    let player = { x: 175, y: 480, w: 50, h: 90 };
-    let hazard = { y: -200, pedX: -30, active: false, type: 'NONE' };
+    let player = { x: 175, y: 480, w: 50, h: 85 };
+    let hazard = { active: false, y: -200, pedX: -40 };
+    let frame = 0;
 
     const questions = [
-        { q: "What is the primary purpose of a Zebra Crossing?", a: ["Decorating the road", "Giving pedestrians right of way", "A place to park"], c: 1 },
-        { q: "Your speed is 40km/h and the light turns Yellow. You should...", a: ["Speed up to beat it", "Brake safely if possible", "Close your eyes"], c: 1 },
-        { q: "When can you move on a Red light?", a: ["If no cars are coming", "Never", "If you are in a hurry"], c: 1 }
+        { q: "What does a flashing yellow light mean?", a: ["Stop immediately", "Proceed with caution", "Speed up"], c: 1 },
+        { q: "You see a pedestrian near the crossing. You...", a: ["Ignore them", "Slow down and prepare to stop", "Honk loudly"], c: 1 },
+        { q: "What distance should you keep from the car ahead?", a: ["1 meter", "3-second gap", "No gap needed"], c: 1 }
     ];
 
     const keys = {};
     window.addEventListener('keydown', e => keys[e.code] = true);
     window.addEventListener('keyup', e => keys[e.code] = false);
 
-    function initGame() {
-        document.getElementById('startScreen').classList.add('hidden');
+    function startGame() {
+        document.getElementById('overlay').classList.add('hidden');
+        lives = 3; score = 0; speed = 0; signal = 'GREEN';
+        updateUI();
+        cycleTraffic();
         active = true;
-        score = 0;
-        speed = 0;
-        cycleLights();
         loop();
     }
 
-    function cycleLights() {
-        if (!active) return;
-        const times = { 'GREEN': 6000, 'YELLOW': 2000, 'RED': 5000 };
-        const order = ['GREEN', 'YELLOW', 'RED'];
-        let currentIndex = order.indexOf(signal);
-        signal = order[(currentIndex + 1) % order.length];
-        
-        // Update Visuals
-        document.getElementById('redL').style.backgroundColor = signal === 'RED' ? '#ff0000' : '#300';
-        document.getElementById('redL').style.boxShadow = signal === 'RED' ? '0 0 20px #ff0000' : 'none';
-        document.getElementById('yellowL').style.backgroundColor = signal === 'YELLOW' ? '#ffdd00' : '#330';
-        document.getElementById('greenL').style.backgroundColor = signal === 'GREEN' ? '#00ff00' : '#030';
-        
-        setTimeout(cycleLights, times[signal]);
+    function updateUI() {
+        document.getElementById('score').innerText = score;
+        document.getElementById('lives').innerText = "❤️".repeat(lives);
     }
 
-    function triggerQuiz(msg) {
-        active = false;
-        const quiz = questions[Math.floor(Math.random()*questions.length)];
-        document.getElementById('quizScreen').classList.remove('hidden');
-        document.getElementById('qText').innerText = msg + "\n\n" + quiz.q;
+    function cycleTraffic() {
+        if(!active) return;
+        const sequence = { 'GREEN': ['YELLOW', 5000], 'YELLOW': ['RED', 2000], 'RED': ['GREEN', 4000] };
+        const [next, time] = sequence[signal];
+        signal = next;
         
-        const area = document.getElementById('qOptions');
-        area.innerHTML = '';
-        quiz.a.forEach((opt, i) => {
-            const b = document.createElement('button');
-            b.className = "w-full bg-slate-800 text-white p-4 rounded-lg hover:bg-red-600 transition text-left border border-white/10";
-            b.innerText = `${i+1}. ${opt}`;
-            b.onclick = () => {
-                if(i === quiz.c) {
-                    document.getElementById('quizScreen').classList.add('hidden');
-                    hazard.active = false;
-                    hazard.y = -200;
+        document.getElementById('redL').style.backgroundColor = signal === 'RED' ? '#ff0000' : '#300';
+        document.getElementById('yellowL').style.backgroundColor = signal === 'YELLOW' ? '#ffaa00' : '#330';
+        document.getElementById('greenL').style.backgroundColor = signal === 'GREEN' ? '#00ff00' : '#030';
+        
+        setTimeout(cycleTraffic, time);
+    }
+
+    function handleMistake(reason) {
+        lives--;
+        updateUI();
+        speed = 0;
+        hazard.active = false;
+        hazard.y = -200;
+
+        if (lives <= 0) {
+            showQuiz();
+        } else {
+            // Brief pause before continuing
+            active = false;
+            alert(reason + " - Careful! " + lives + " lives left.");
+            active = true;
+            loop();
+        }
+    }
+
+    function showQuiz() {
+        active = false;
+        const q = questions[Math.floor(Math.random() * questions.length)];
+        document.getElementById('quizBox').classList.remove('hidden');
+        document.getElementById('qText').innerText = q.q;
+        
+        const opts = document.getElementById('qOptions');
+        opts.innerHTML = '';
+        q.a.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.className = "w-full bg-white text-black p-4 font-bold hover:bg-gray-200 transition";
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if(i === q.c) {
+                    lives = 1; // Give one last life
+                    updateUI();
+                    document.getElementById('quizBox').classList.add('hidden');
                     active = true;
                     loop();
                 } else {
-                    location.reload(); // Hard reset on wrong answer
+                    gameOver();
                 }
             };
-            area.appendChild(b);
+            opts.appendChild(btn);
         });
     }
 
-    function drawRoad() {
-        // Road markings
-        ctx.strokeStyle = "rgba(255,255,255,0.2)";
-        ctx.setLineDash([20, 20]);
-        ctx.beginPath();
-        ctx.moveTo(200, 0); ctx.lineTo(200, 600);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    function gameOver() {
+        document.getElementById('quizBox').classList.add('hidden');
+        document.getElementById('overlay').classList.remove('hidden');
+        document.getElementById('statusTitle').innerText = "LICENSE REVOKED";
+        document.getElementById('statusDesc').innerText = "Final Score: " + score;
     }
 
     function loop() {
         if (!active) return;
-        ctx.fillStyle = "#333";
+        frame++;
+        ctx.fillStyle = "#222";
         ctx.fillRect(0, 0, 400, 600);
-        
-        drawRoad();
 
-        // Physics
-        if (keys['ArrowUp']) speed = Math.min(speed + 0.15, 6);
-        else speed = Math.max(speed - 0.2, 0);
+        // Road Lines
+        ctx.strokeStyle = "#444";
+        ctx.setLineDash([40, 40]);
+        ctx.lineDashOffset = -frame * speed;
+        ctx.beginPath();
+        ctx.moveTo(200, 0); ctx.lineTo(200, 600);
+        ctx.stroke();
 
-        // Movement
-        if (keys['ArrowLeft'] && player.x > 20) player.x -= 4;
-        if (keys['ArrowRight'] && player.x < 330) player.x += 4;
+        // Controls
+        if (keys['ArrowUp']) speed = Math.min(speed + 0.2, 7);
+        else speed = Math.max(speed - 0.25, 0);
+        if (keys['ArrowLeft'] && player.x > 10) player.x -= 5;
+        if (keys['ArrowRight'] && player.x < 340) player.x += 5;
 
-        // Rule: Red Light Penalty
-        if (signal === 'RED' && speed > 0.2) {
-            triggerQuiz("You failed to stop for the RED light!");
+        // Red Light Check
+        if (signal === 'RED' && speed > 0.5) {
+            handleMistake("🚨 RED LIGHT VIOLATION!");
             return;
         }
 
-        // Zebra Logic
-        if (!hazard.active && Math.random() < 0.005) {
+        // Hazard Spawn
+        if (!hazard.active && frame % 300 === 0) {
             hazard.active = true;
-            hazard.y = -100;
-            hazard.pedX = -20;
+            hazard.y = -150;
+            hazard.pedX = -30;
         }
 
         if (hazard.active) {
             hazard.y += speed;
-            hazard.pedX += 1.5;
-
-            // Draw Zebra
-            for(let i=0; i<10; i++) {
-                ctx.fillStyle = "white";
-                ctx.fillRect(i*45, hazard.y, 30, 80);
-            }
+            hazard.pedX += 2.5;
             
-            // Draw Pedestrian (Simple Stickman)
-            ctx.fillStyle = "#ffcc00"; // Shirt
-            ctx.fillRect(hazard.pedX, hazard.y + 20, 15, 25);
-            ctx.fillStyle = "#ffdbac"; // Head
-            ctx.beginPath();
-            ctx.arc(hazard.pedX + 7, hazard.y + 15, 7, 0, Math.PI*2);
-            ctx.fill();
+            // Draw Zebra
+            ctx.fillStyle = "rgba(255,255,255,0.8)";
+            for(let i=0; i<8; i++) ctx.fillRect(i*55, hazard.y, 35, 100);
+            
+            // Draw Man (Walking)
+            ctx.fillStyle = "#ffdbac"; ctx.fillRect(hazard.pedX, hazard.y+20, 20, 20); // Head
+            ctx.fillStyle = "#33d"; ctx.fillRect(hazard.pedX, hazard.y+40, 20, 35); // Body
+            // Animated Legs
+            ctx.fillStyle = "#000";
+            let legOffset = Math.sin(frame * 0.2) * 10;
+            ctx.fillRect(hazard.pedX + 2, hazard.y+75, 6, 15 + legOffset);
+            ctx.fillRect(hazard.pedX + 12, hazard.y+75, 6, 15 - legOffset);
 
-            // Collision / Proximity Check
-            let carFront = player.y;
-            if (speed > 0.5 && carFront < hazard.y + 80 && carFront + 20 > hazard.y) {
-                triggerQuiz("Stop completely before the Zebra crossing while people are walking!");
+            // Crossing Penalty
+            if (speed > 0.5 && player.y < hazard.y + 100 && player.y + player.h > hazard.y) {
+                handleMistake("🚶 PEDESTRIAN IN CROSSWALK!");
                 return;
             }
 
             if (hazard.y > 600) {
                 hazard.active = false;
-                score += 100;
-                document.getElementById('score').innerText = score;
+                score += 50;
+                updateUI();
             }
         }
 
-        // Draw Player (Car)
-        ctx.fillStyle = "#1e40af"; // Body
-        ctx.roundRect(player.x, player.y, player.w, player.h, 10);
-        ctx.fill();
-        ctx.fillStyle = "#93c5fd"; // Windshield
-        ctx.fillRect(player.x + 5, player.y + 15, 40, 20);
-        // Brake Lights
-        ctx.fillStyle = speed === 0 ? "#ff0000" : "#500";
-        ctx.fillRect(player.x + 5, player.y + 80, 10, 5);
-        ctx.fillRect(player.x + 35, player.y + 80, 10, 5);
+        // Draw Player Car
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+        ctx.fillStyle = "#000"; // Wheels
+        ctx.fillRect(player.x-5, player.y+10, 5, 20);
+        ctx.fillRect(player.x+50, player.y+10, 5, 20);
+        ctx.fillRect(player.x-5, player.y+60, 5, 20);
+        ctx.fillRect(player.x+50, player.y+60, 5, 20);
 
         requestAnimationFrame(loop);
-    }
-
-    // Helper for rounded rects
-    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-      if (w < 2 * r) r = w / 2;
-      if (h < 2 * r) r = h / 2;
-      this.beginPath();
-      this.moveTo(x + r, y);
-      this.arcTo(x + w, y, x + w, y + h, r);
-      this.arcTo(x + w, y + h, x, y + h, r);
-      this.arcTo(x, y + h, x, y, r);
-      this.arcTo(x, y, x + w, y, r);
-      this.closePath();
-      return this;
     }
 </script>
 </body>
 </html>
+       
